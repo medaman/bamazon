@@ -18,31 +18,29 @@ var connection = mysql.createConnection({
 
 });
 
-var start = function() {
-  connection.connect(function(err) {
-    if (err) {
-      return console.log(err);
-    }
+connection.connect(function(err) {
+  if (err) {
+    return console.log(err);
+  }
 
-    var query = connection.query(
-      "SELECT * FROM products",
-      function(err, res) {
-        if (err) {
-          return console.log(err);
-        }
-        for (var i=0; i<res.length; i++) {
-          items.push(res[i].item_id);
-          if (!departments.includes(res[i].department_name)) {
-            departments.push(res[i].department_name);
-          }
-        }
-        manager(res);
+  var query = connection.query(
+    "SELECT * FROM products",
+    function(err, res) {
+      if (err) {
+        return console.log(err);
       }
-    )
-  });
-}
+      for (var i=0; i<res.length; i++) {
+        items.push(res[i].item_id);
+        if (!departments.includes(res[i].department_name)) {
+          departments.push(res[i].department_name);
+        }
+      }
+      manager();
+    }
+  )
+});
 
-var manager = function(res) {
+var manager = function() {
   inquirer.prompt({
     name: "action",
     message: "What would you like to do?",
@@ -56,101 +54,25 @@ var manager = function(res) {
   }).then(function(answer) {
     
     if (answer.action === 1) {
-      displayProducts();      
+      viewProducts();      
     } else if (answer.action === 2) {
-      connection.query("SELECT * FROM products WHERE stock_quantity < 5", function(err, result) {
-        var tableLowQuant = new Table({
-          head: ['ID','Product Name', 'Price', "Stock Quantity"],
-          colWidths: [6, 40, 15, 20]
-        });
-
-        for(var i=0; i<result.length; i++) {
-          tableLowQuant.push(
-                  [result[i].item_id,
-                   result[i].product_name, 
-                   result[i].price,
-                   result[i].stock_quantity]);
-        }
-        console.log(tableLowQuant.toString());
-        manager(res);
-      })
+      viewLowInventory();
     } else if(answer.action === 3) {
-      inquirer.prompt([
-        {
-          name: "id",
-          message: "Which ID would you like to add products to: "
-        },
-        {
-          name: "quantity",
-          message: "Quantity: "
-        }
-      ]).then(function(answer) {
-        if (items.includes(parseInt(answer.id))) {
-          connection.query("SELECT stock_quantity FROM products WHERE ?", [{item_id: parseInt(answer.id)}], function(err, stock) {
-            if (err) {
-              return console.log(err)
-            }
-            var newQuantity = stock[0].stock_quantity + parseInt(answer.quantity);
-            connection.query("UPDATE products SET ? WHERE ?", [{stock_quantity: newQuantity}, { item_id: parseInt(answer.id)}], function(err) {
-              if(err) {return console.log(err)}
-            })
-          })
-          console.log("Quantity Added.");
-        } else {
-          console.log("Item ID does not exist.")
-        }
-        manager(res);
-      })
+      addToInventory();
     } else if(answer.action === 4) {
-      inquirer.prompt([
-        {
-          name:"product_name",
-          message: "Product Name: "
-        },
-        {
-          name:"department_name",
-          message: "Department Name: ",
-          type: "list",
-          choices: departments
-        },
-        {
-          name:"price",
-          message: "Price: "
-        },
-        {
-          name:"stock_quantity",
-          message: "Stock Quantity: ",
-        }
-      ]).then(function(answer) {
-        connection.query(
-          "INSERT INTO products SET ?",
-          {
-            product_name: answer.product_name,
-            department_name: answer.department_name,
-            price: parseInt(answer.price),
-            stock_quantity: parseInt(answer.stock_quantity)
-          },
-          function(err) {
-            if (err) {
-              return console.log(err);
-            }
-            console.log("Product Added.")
-            displayProducts();
-          }
-        )
-      })
+      addNewProduct();
     } else {
       connection.end();
     }
   })
 }
 
-var displayProducts = function() {
+var viewProducts = function() {
   connection.query(
     "SELECT * FROM products",
     function(err, results) {
       if (err) {
-        return consolxe.log(err);
+        return console.log(err);
       }
       var table = new Table({
                       head: ['ID','Product Name', 'Price', "Stock Quantity"],
@@ -166,9 +88,95 @@ var displayProducts = function() {
                  results[i].stock_quantity]);
       }
       console.log(table.toString());
-      manager(results);
+      manager();
     }
   )
 }
 
-start();
+var viewLowInventory = function() {
+  connection.query("SELECT * FROM products WHERE stock_quantity < 5", function(err, result) {
+    var tableLowQuant = new Table({
+      head: ['ID','Product Name', 'Price', "Stock Quantity"],
+      colWidths: [6, 40, 15, 20]
+    });
+
+    for(var i=0; i<result.length; i++) {
+      tableLowQuant.push(
+              [result[i].item_id,
+               result[i].product_name, 
+               result[i].price,
+               result[i].stock_quantity]);
+    }
+    console.log(tableLowQuant.toString());
+    manager();
+  })
+}
+
+var addToInventory = function() {
+  inquirer.prompt([
+    {
+      name: "id",
+      message: "Which ID would you like to add products to: "
+    },
+    {
+      name: "quantity",
+      message: "Quantity: "
+    }
+  ]).then(function(answer) {
+    if (items.includes(parseInt(answer.id))) {
+      connection.query("SELECT stock_quantity FROM products WHERE ?", [{item_id: parseInt(answer.id)}], function(err, stock) {
+        if (err) {
+          return console.log(err)
+        }
+        var newQuantity = stock[0].stock_quantity + parseInt(answer.quantity);
+        connection.query("UPDATE products SET ? WHERE ?", [{stock_quantity: newQuantity}, { item_id: parseInt(answer.id)}], function(err) {
+          if(err) {return console.log(err)}
+        })
+      })
+      console.log("Quantity Added.");
+    } else {
+      console.log("Item ID does not exist.")
+    }
+    manager();
+  })
+}
+
+var addNewProduct = function() {
+  inquirer.prompt([
+    {
+      name:"product_name",
+      message: "Product Name: "
+    },
+    {
+      name:"department_name",
+      message: "Department Name: ",
+      type: "list",
+      choices: departments
+    },
+    {
+      name:"price",
+      message: "Price: "
+    },
+    {
+      name:"stock_quantity",
+      message: "Stock Quantity: ",
+    }
+  ]).then(function(answer) {
+    connection.query(
+      "INSERT INTO products SET ?",
+      {
+        product_name: answer.product_name,
+        department_name: answer.department_name,
+        price: parseInt(answer.price),
+        stock_quantity: parseInt(answer.stock_quantity)
+      },
+      function(err) {
+        if (err) {
+          return console.log(err);
+        }
+        console.log("Product Added.")
+        viewProducts();
+      }
+    )
+  })
+}
